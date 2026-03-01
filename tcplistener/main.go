@@ -1,19 +1,25 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"log"
 	"net"
+	"strconv"
+
+	"github.com/http_server/request"
 )
 
+var PORT int = 42069
+
 func main() {
-	l, err := net.Listen("tcp", ":42069")
+	portStr := fmt.Sprintf(":%s", strconv.Itoa(PORT))
+	l, err := net.Listen("tcp", portStr)
 	if err != nil {
 		log.Fatal("couldn't connect", err)
 	}
 	defer l.Close()
+
+	fmt.Printf("listening on: localhost:%d\n", PORT)
 
 	// lines := getLinesChannel(file)
 	// line := <-lines
@@ -21,48 +27,21 @@ func main() {
 	for {
 		conn, err := l.Accept()
 		if err != nil {
-			log.Fatal("error accepting connetction", err)
+			log.Fatal("error accepting connetction: ", err)
 		}
 		fmt.Println("connection accpeted!")
-		for line := range getLinesChannel(conn) {
-			fmt.Println(line)
+
+		request, err := request.RequestFromReader(conn)
+		if err != nil {
+			log.Fatal("erro handeling request: ", err)
 		}
+
+		rl := request.RequestLine
+		fmt.Printf("Request line:\n- Method: %s\n- Target: %s\n- Version: %s\n",
+			rl.Method,
+			rl.Target,
+			rl.Version,
+		)
 
 	}
-}
-
-func getLinesChannel(f io.ReadCloser) <-chan string {
-	ch := make(chan string)
-
-	go func() {
-		defer close(ch)
-
-		line := ""
-		buf := make([]byte, 8)
-
-		for {
-			n, err := f.Read(buf)
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				panic(err)
-			}
-
-			data := buf[:n]
-
-			if i := bytes.IndexByte(data, '\n'); i != -1 {
-				line += string(data[:i])
-				ch <- line
-				line = ""
-				data = data[i+1:]
-			}
-
-			line += string(data)
-		}
-		if line != "" {
-			ch <- line
-		}
-	}()
-	return ch
 }
